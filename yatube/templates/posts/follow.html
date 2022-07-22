@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}Последние обновления в ваших подписках{% endblock %}
+{% block content %}
+{% include 'includes/switcher.html' %}
+<h1>Последние обновления в ваших подписках</h1>
+{% include 'includes/article.html' %}
+{% include 'includes/paginator.html' %}
+{% endblock %}
