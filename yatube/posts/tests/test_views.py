@@ -1,3 +1,4 @@
+import http
 import shutil
 import tempfile
 
@@ -61,7 +62,7 @@ class PagesAndContext(TestCase):
         self.group = Group.objects.get(slug='group_slug')
 
     def test_pages_uses_correct_template(self):
-        '''Тестируем, что имена из namespace вызывают правильные шаблоны'''
+        '''Имена из namespace вызывают правильные шаблоны'''
 
         test_objects = {
             reverse('posts:index'): 'posts/index.html',
@@ -115,13 +116,14 @@ class PagesAndContext(TestCase):
                 self.assertEqual(test_post.text, self.post.text)
                 self.assertEqual(test_post.group, self.post.group)
                 self.assertEqual(test_post.created, self.post.created)
-                self.assertTrue(
+                self.assertEqual(
                     test_post.image,
+                    self.post.image,
                     'На странице не выводится картинка поста'
                 )
 
     def test_page_paginator(self):
-        '''Тестируем, что пагинатор отдаёт корректное количество постов'''
+        '''Пагинатор отдаёт корректное количество постов'''
 
         Post.objects.bulk_create([
             Post(
@@ -157,10 +159,7 @@ class PagesAndContext(TestCase):
                 f'ошибка в выдаче второй страницы пагинации на {page}')
 
     def test_index_page_show_all_posts_from_defferent_groups(self):
-        '''
-        Тестируем, что главная страница отображает все посты, в том
-        числе их разных групп
-        '''
+        '''Главная страница отображает все посты, даже их разных групп'''
 
         group_2 = Group.objects.create(
             title='Название группы 2',
@@ -179,9 +178,7 @@ class PagesAndContext(TestCase):
         self.assertEqual(test_posts_count, all_posts_count)
 
     def test_group_page_show_posts_only_from_one_group(self):
-        '''
-        Тестируем, что на странице группы отображаются посты только этой группы
-        '''
+        '''На странице группы отображаются посты только этой группы'''
 
         new_group = Group.objects.create(
             title='Название группы 2',
@@ -203,9 +200,7 @@ class PagesAndContext(TestCase):
                 self.assertEqual(post.group.slug, self.group.slug)
 
     def test_profile_page_show_posts_from_one_user(self):
-        '''
-        Тестируем, что в профиле отображаются только посты пользователя
-        '''
+        '''В профиле отображаются только посты пользователя'''
 
         author_2 = User.objects.create(username='tom')
         Post.objects.create(
@@ -223,10 +218,7 @@ class PagesAndContext(TestCase):
                     post.author.username, author_2.username)
 
     def test_create_post_and_check_it_availability(self):
-        '''
-        Проверяем создание поста и его появление вначале
-        главной, страницы группы и профиля пользователя
-        '''
+        '''Новый пост появляется на главной и страницах групп и профиля'''
         test_post = Post.objects.create(
             author=self.user_author,
             text='тестовый тост',
@@ -259,10 +251,7 @@ class PagesAndContext(TestCase):
                 self.assertEqual(post.id, test_post.id, error)
 
     def test_only_authorized_user_can_send_comment(self):
-        '''
-        Провреям, что только авторизованный пользователь
-        может оставить коммент к посту
-        '''
+        '''Только авторизованный пользователь может оставить коммент к посту'''
 
         test_sessions = [
             (
@@ -287,13 +276,13 @@ class PagesAndContext(TestCase):
                 self.assertRedirects(
                     user.get(add_comment),
                     result,
-                    302,
-                    200,
+                    http.HTTPStatus.FOUND,
+                    http.HTTPStatus.OK,
                     error
                 )
 
     def test_index_page_cache(self):
-        '''Проверяем, что главная страница кэшируется'''
+        '''Главная страница кэшируется'''
 
         cached_post = Post.objects.create(
             text='ты закэширован',
@@ -307,19 +296,19 @@ class PagesAndContext(TestCase):
 
         self.assertContains(
             visit_1,
-            'ты закэширован',
+            cached_post,
             msg_prefix='Новый пост не добавился на страницу'
         )
 
         self.assertContains(
             visit_2,
-            'ты закэширован',
+            cached_post,
             msg_prefix='Пост не закеширован'
         )
 
         self.assertNotContains(
             visit_3,
-            'ты закэширован',
+            cached_post,
             msg_prefix='Пост всё ещё закэширован'
         )
 
@@ -349,10 +338,8 @@ class FollowTesting(TestCase):
         self.subscriber_2_authorized = Client()
         self.subscriber_2_authorized.force_login(self.subscriber_2)
 
-    def test_user_can_subscribe_and_unsubscribe_from_author(self):
-        '''
-        Проверяем, что пользователь может подписаться и отписаться на автора
-        '''
+    def test_user_can_subscribe_to_author(self):
+        '''На автора можно подписаться'''
         count_followings = Follow.objects.count()
         self.subscriber_2_authorized.get(
             reverse(
@@ -378,34 +365,55 @@ class FollowTesting(TestCase):
             'подписка создана не на того автора'
         )
 
-        test_subscribe.delete()
+    def test_user_can_unsubscribe_from_author(self):
+        '''От автора можно отписаться'''
+
+        count_followings = Follow.objects.count()
+        self.subscriber_authorized.get(
+            reverse(
+                'posts:profile_unfollow',
+                kwargs={'username': self.user_author.username}
+            )
+        )
+
         self.assertEqual(
             Follow.objects.count(),
-            count_followings,
+            count_followings - 1,
             'подписка не удалилась'
         )
 
     def test_new_post_shown_in_subscribes(self):
-        '''Проверяем, что новый пост появляется в подписках'''
+        '''Новый пост появляется в подписке'''
 
-        Post.objects.create(
+        new_post = Post.objects.create(
             text='смотри, там собака',
             author=self.user_author
         )
-        follower_visit = self.subscriber_authorized.get(
+        follow_page = self.subscriber_authorized.get(
             reverse('posts:follow_index')
         )
-        unfollower_visit = self.subscriber_2_authorized.get(
-            reverse('posts:follow_index')
-        )
-        self.assertContains(
-            follower_visit,
-            'смотри, там собака',
-            msg_prefix='Новый пост не появился на странице подписчика'
+        posts = follow_page.context['page_obj']
+
+        self.assertIn(
+            new_post,
+            posts,
+            'Новый пост не появился на странице подписчика'
         )
 
-        self.assertNotContains(
-            unfollower_visit,
-            'смотри, там собака',
-            msg_prefix='Новый пост появился на странице неподписчика'
+    def test_new_post_not_shown_to_not_follower(self):
+        '''Новый пост не появляется у неподписчика'''
+
+        new_post = Post.objects.create(
+            text='смотри, там собака',
+            author=self.user_author
+        )
+        follow_page = self.subscriber_2_authorized.get(
+            reverse('posts:follow_index')
+        )
+        posts = follow_page.context['page_obj']
+
+        self.assertNotIn(
+            new_post,
+            posts,
+            'Новый пост появился на странице левого подписчика'
         )

@@ -140,9 +140,7 @@ def profile_follow(request, username):
             user=request.user,
             author=author
         )
-        return redirect('posts:profile', username=username)
-    else:
-        return redirect('posts:profile', username=username)
+    return redirect('posts:profile', username=username)
 
 
 @login_required
@@ -152,5 +150,6 @@ def profile_unfollow(request, username):
         user=request.user,
         author=author
     )
-    follow.delete()
+    if follow.exists():
+        follow.delete()
     return redirect('posts:profile', username=username)
