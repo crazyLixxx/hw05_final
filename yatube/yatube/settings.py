@@ -27,6 +27,7 @@ DEBUG = False
 
 ALLOWED_HOSTS = [
     '84.201.131.156',
+    'crazylixx.zapto.org',
 ]
 
 
