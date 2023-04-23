@@ -166,15 +166,7 @@ CSRF_FAILURE_VIEW = 'core.views.csrf_failure'
 sentry_sdk.init(
     dsn="https://9fb5ac8f086c4357a643ffcd0717ac02@o4505062773293056.ingest.sentry.io/4505062778273792",
     integrations=[
-        DjangoIntegration(),
-    ],
-
-    # Set traces_sample_rate to 1.0 to capture 100%
-    # of transactions for performance monitoring.
-    # We recommend adjusting this value in production.
+        DjangoIntegration(),],
     traces_sample_rate=1.0,
-
-    # If you wish to associate users to errors (assuming you are using
-    # django.contrib.auth) you may enable sending PII data.
     send_default_pii=True
 )
